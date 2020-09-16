@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: EC2 Instance
+Parameters:
+  paramKeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  paramInstanceType:
+    Description: EC2 instance specs configuration
+    Type: String
+    Default: t2.large
+    AllowedValues:
+      - t2.large
+      - t2.xlarge
+
+Mappings:
+  AMIs:
+    us-east-1:
+      Name: ami-06b263d6ceff0b3dd
+    us-east-2:
+      Name: ami-0010d386b82bc06f0
+
+Resources:
+  AWSBLOGBEANEC2InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+
+  AWSBlogBeanstalkS3BucketsPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: AWS-BLOG-S3BucketsPolicy
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:*'
+            Resource: '*'
+      Roles:
+        - !Ref AWSBLOGBEANEC2InstanceRole
+
+  AWSBlogBeanstalkInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref AWSBLOGBEANEC2InstanceRole
+
+  GitLabEC2Instance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      InstanceType: !Ref paramInstanceType
+      KeyName: !Ref paramKeyName
+      IamInstanceProfile: !Ref AWSBlogBeanstalkInstanceProfile
+      ImageId: !FindInMap
+        - AMIs
+        - !Ref 'AWS::Region'
+        - Name
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          AssociatePublicIpAddress: 'true'
+          DeleteOnTermination: 'true'
+          SubnetId:
+              Fn::ImportValue: "awsblogbean-public-subnet-a"
+          GroupSet:
+              - Fn::ImportValue: "awsblogbean--securitygroup-id"
+      Tags:
+        - Key: Name
+          Value: AWSBlogBeanstalk-EC2Instance
+      UserData: !Base64
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - |
+              cd /home/ubuntu/;
+            - |
+              touch test1;
+            - |
+              sudo apt update -y
+            - |
+              sudo apt install awscli -y
+            - |
+              aws s3 cp s3://skkodali-proserve/beanstalk-gitlab/shell/gitlab-setup.sh .
+            - |
+              chmod -R 777 gitlab-setup.sh
+            - |
+              sh -x ./gitlab-setup.sh > gitlab-setup-output.log
