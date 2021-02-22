@@ -63,7 +63,7 @@ _setupSSLCerts()
 
 _upLoadToS3Path()
 {
-  ${AWS} ${S3_COPY} ${GITLAB_CERTS_DIR}/${CERT_CRT} ${1}
+  ${AWS} ${S3_COPY} ${GITLAB_CERTS_DIR}/${CERT_CRT} s3://${1}/myca.crt
 }
 
 _updateGitLabConfig()
